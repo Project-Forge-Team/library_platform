@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# KitobFlow
 
-## Getting Started
+Рабочая MVP-демонстрация системы управления библиотекой на Next.js 16 / React 19. Интерфейс на русском языке. Вымышленная организация «Центральная библиотека Ташкента».
 
-First, run the development server:
+## Запуск
+
+Требуется Node.js 22.18+ (для тестов со встроенным выполнением TypeScript) и npm.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Откройте http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm start
+npm test
+npx tsc --noEmit
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# В другом терминале при запущенном npm run dev (нужен Google Chrome)
+npm run test:e2e
+```
 
-## Learn More
+## Что работает
 
-To learn more about Next.js, take a look at the following resources:
+- Простая главная: четыре показателя и очередь книг к возврату. Основная навигация — читатели, каталог и выдачи; посещения, уведомления и журнал находятся в меню «Дополнительно».
+- Добавление и редактирование читателей; поиск, фильтр статуса, профиль с QR-билетом, выдачами и посещениями. QR содержит только случайный публичный идентификатор.
+- Каталог из 16 книг: обложки, категории, поиск, редактирование, остатки и история выдач.
+- Выдача книги, изменение срока и возврат с проверкой дат, остатков, статуса читателя и повторных действий.
+- Вход и выход: один активный визит на читателя, история посещений.
+- Проверка сроков: напоминания за три дня (включая оставшиеся 1–2 дня), в день возврата и при просрочке. Учитывается согласие на SMS. Дубликаты по выдаче, событию и сроку не создаются.
+- Симуляция SMS: статус «Отправлено (демо)», журнал событий; неактуальные уведомления не отправляются.
+- Поиск и фильтры истории операций; настройки библиотеки, экспорт JSON, подтверждаемый сброс демо.
+- Данные хранятся в localStorage, ключ `kitobflow-v1`. При первом запуске создаются 15 читателей, 16 книг, выдачи, возвраты и посещения относительно текущей даты.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Сценарий демонстрации
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. Нажмите «Добавить читателя» на главной. Введите имя и тестовый телефон, например `+998 00 000 00 99`.
+2. После сохранения откроется профиль и электронный билет.
+3. Нажмите «Выдать книгу», выберите книгу и подтвердите срок в 7 дней.
+4. Откройте «Выдача и возврат». Кнопка календаря меняет срок.
+5. Нажмите «Сделать просроченной (демо)»: срок станет вчерашним, дата выдачи при необходимости переместится на 8 дней назад. Это позволяет сохранить корректный порядок дат.
+6. В «Уведомлениях» нажмите «Проверить сроки сейчас», найдите читателя, симулируйте отправку.
+7. Найдите запись в «Истории операций».
+8. Примите возврат кнопкой со стрелкой у выдачи. Проверьте профиль, остатки, дашборд и сохранение после перезагрузки.
+9. В «Посещениях» отметьте вход и выход. В «Настройках» можно восстановить исходное демо.
 
-## Deploy on Vercel
+## Структура
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `lib/library.ts` — типизированные сущности, бизнес-правила, генерация данных, интерфейсы Repository и SmsProvider. Для перехода на API/PostgreSQL замените реализацию Repository и перенесите транзакции/проверки на сервер.
+- `lib/i18n.ts` — ключи навигации и начальная структура локализации; остальные тексты нужно перенести в словарь перед добавлением узбекского языка.
+- `components/forms.tsx` — формы React Hook Form / Zod.
+- `components/ui` — адаптированные компоненты по подходу shadcn/ui (Radix Dialog, Button с CVA).
+- `app/page.tsx` — рабочее пространство, навигация, таблицы, карточки.
+- `tests/library.test.ts` — проверки ключевых бизнес-инвариантов и сохранения данных.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Ограничения демо
+
+Демо не является защищённой production-системой. Нет реальной авторизации, сервера, фонового планировщика, синхронизации между браузерами и реальной отправки SMS. Используйте только вымышленные данные. Телефоны в начальном наборе имеют явно тестовый префикс `+998 00`. Напоминания генерируются вручную при проверке сроков. Удаление данных браузера удалит введённые записи; перед этим доступен экспорт JSON. Несколько одновременно открытых вкладок могут перезаписать изменения — работайте в одной вкладке.
