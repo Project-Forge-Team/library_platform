@@ -207,3 +207,85 @@ test("выдача из книги сохраняет выбранную кни�
   expect(issued.bookId).toBe("book-0");
   expect(issued.readerId).toBe("reader-0");
 });
+
+test("схема столиков: бронь, занятый стол, перезагрузка и отмена", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page
+    .locator("nav")
+    .getByRole("button", { name: "Столики", exact: true })
+    .click();
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const date = [
+    tomorrow.getFullYear(),
+    String(tomorrow.getMonth() + 1).padStart(2, "0"),
+    String(tomorrow.getDate()).padStart(2, "0"),
+  ].join("-");
+  await page.getByLabel("Дата бронирования").fill(date);
+  await page.getByLabel("Начало бронирования").fill("10:00");
+  await page.getByLabel("Окончание бронирования").fill("11:00");
+  const table = page.getByRole("button", {
+    name: "Стол 01 · 1 место · свободен",
+    exact: true,
+  });
+  await table.click();
+  await expect(
+    page.getByRole("heading", { name: "Бронь стола 01" }),
+  ).toBeVisible();
+  await page.getByLabel("Читатель для брони").selectOption("reader-0");
+  await page.getByRole("radio", { name: "Учёба", exact: true }).check();
+  await page
+    .getByRole("button", { name: "Забронировать стол", exact: true })
+    .click();
+  const row = page.locator(".booking-list tbody tr");
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Азиз Рахимов");
+  await expect(row).toContainText("Учёба");
+  await expect(row).toContainText("10:00–11:00");
+  await expect(
+    page.getByRole("button", {
+      name: "Стол 01 · 1 место · занят",
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await page.getByLabel("Начало бронирования").fill("11:00");
+  await page.getByLabel("Окончание бронирования").fill("12:00");
+  await expect(table).toBeEnabled();
+  await page.reload();
+  await page
+    .locator("nav")
+    .getByRole("button", { name: "Столики", exact: true })
+    .click();
+  await page.getByLabel("Дата бронирования").fill(date);
+  await page.getByLabel("Начало бронирования").fill("10:00");
+  await page.getByLabel("Окончание бронирования").fill("11:00");
+  await expect(row).toHaveCount(1);
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.screenshot({ path: "tests/artifacts/tables.png", fullPage: true });
+  await row.getByRole("button", { name: "Отменить", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Да, отменить бронь", exact: true })
+    .click();
+  await expect(row).toContainText("Отменена");
+  await expect(table).toBeEnabled();
+  const stored = await page.evaluate(
+    () => JSON.parse(localStorage.getItem("kitobflow-v1")!).bookings[0],
+  );
+  expect(stored.cancelledAt).toBeTruthy();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: "tests/artifacts/tables-mobile.png",
+    animations: "disabled",
+    fullPage: true,
+  });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBeTruthy();
+  expect(errors).toEqual([]);
+});

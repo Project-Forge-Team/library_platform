@@ -117,3 +117,101 @@ test("демо-данные и localStorage сохраняются и сбрас
   assert.equal(repository.load().library, "Тестовая библиотека");
   assert.equal(repository.reset().library, "Центральная библиотека Ташкента");
 });
+
+test("бронирование: пересечения, соседние интервалы, отмена и сохранение", async () => {
+  const { bookTable, cancelBooking } = await import("../lib/booking.ts");
+  const db = seed();
+  const tomorrow = day(addDays(new Date(), 1));
+  const input = {
+    tableId: "table-1",
+    readerId: "reader-0",
+    date: tomorrow,
+    start: "10:00",
+    end: "11:00",
+    purpose: "reading" as const,
+  };
+  const first = bookTable(db, input);
+  assert.equal(db.bookings.length, 1);
+  assert.throws(
+    () =>
+      bookTable(db, {
+        ...input,
+        readerId: "reader-1",
+        start: "10:30",
+        end: "11:30",
+      }),
+    /стол уже забронирован/,
+  );
+  assert.throws(
+    () =>
+      bookTable(db, {
+        ...input,
+        readerId: "reader-2",
+        start: "09:00",
+        end: "12:00",
+      }),
+    /стол уже забронирован/,
+  );
+  assert.throws(
+    () => bookTable(db, { ...input, tableId: "table-2" }),
+    /У читателя уже есть бронь/,
+  );
+  const adjacent = bookTable(db, {
+    ...input,
+    readerId: "reader-1",
+    start: "11:00",
+    end: "12:00",
+  });
+  assert.ok(adjacent);
+  cancelBooking(db, first.id);
+  assert.throws(() => cancelBooking(db, first.id), /уже отменена/);
+  bookTable(db, { ...input, readerId: "reader-2" });
+  repository.save(db);
+  const loaded = repository.load();
+  assert.equal(loaded.bookings.length, 3);
+  assert.ok(loaded.bookings.find((b) => b.id === first.id)?.cancelledAt);
+  assert.ok(loaded.events.some((e) => e.type.includes("Бронь стола")));
+});
+test("бронирование отклоняет прошедшее время, неверные интервалы и заблокированных читателей", async () => {
+  const { bookTable } = await import("../lib/booking.ts");
+  const db = seed();
+  const input = {
+    tableId: "table-1",
+    readerId: "reader-0",
+    date: day(addDays(new Date(), 1)),
+    start: "10:00",
+    end: "11:00",
+    purpose: "study" as const,
+  };
+  assert.throws(
+    () => bookTable(db, { ...input, date: day(addDays(new Date(), -1)) }),
+    /прошедшее время/,
+  );
+  for (const slot of [
+    { start: "11:00", end: "10:00" },
+    { start: "08:00", end: "10:00" },
+    { start: "19:00", end: "21:00" },
+    { start: "10:15", end: "11:00" },
+  ])
+    assert.throws(() => bookTable(db, { ...input, ...slot }));
+  assert.throws(() => bookTable(db, { ...input, date: "2026-02-30" }));
+  assert.throws(
+    () => bookTable(db, { ...input, tableId: "missing" }),
+    /Выберите стол/,
+  );
+  db.readers[0].status = "blocked";
+  assert.throws(() => bookTable(db, input), /активного читателя/);
+});
+test("переход на бронирования сохраняет старые данные браузера", () => {
+  const original = seed();
+  const { tables, bookings, ...legacy } = original;
+  assert.equal(tables.length, 8);
+  assert.equal(bookings.length, 0);
+  localStorage.setItem("kitobflow-v1", JSON.stringify(legacy));
+  const migrated = repository.load();
+  assert.equal(migrated.tables.length, 8);
+  assert.equal(migrated.bookings.length, 0);
+  assert.deepEqual(migrated.readers, original.readers);
+  assert.equal(JSON.stringify(migrated.loans), JSON.stringify(original.loans));
+  assert.equal(repository.load().tables.length, 8);
+});

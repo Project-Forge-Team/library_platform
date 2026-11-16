@@ -3,6 +3,7 @@ export const ru = {
   readers: "Читатели",
   books: "Каталог книг",
   loans: "Выдача и возврат",
+  tables: "Столики",
   visits: "Посещения",
   notices: "Уведомления",
   history: "История операций",

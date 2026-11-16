@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import {
+  Armchair,
   ArrowDownLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -61,12 +62,15 @@ import {
   generateNotices,
   demoSmsProvider,
 } from "@/lib/library";
+import { TableBookings } from "@/components/table-bookings";
+import { bookTable, cancelBooking } from "@/lib/booking";
 import { ru, type Section } from "@/lib/i18n";
 const icons = {
   dashboard: LayoutDashboard,
   readers: Users,
   books: BookOpen,
   loans: ArrowLeftRight,
+  tables: Armchair,
   visits: DoorOpen,
   notices: MessageSquare,
   history: History,
@@ -156,7 +160,7 @@ export default function Home() {
     setSidebar(false);
   }
   function mutate(fn: (d: Database) => void, success: string, close = true) {
-    if (!live.current || locked.current) return;
+    if (!live.current || locked.current) return false;
     locked.current = true;
     try {
       const next = structuredClone(live.current);
@@ -167,6 +171,7 @@ export default function Home() {
       setStorageError("");
       setToast(success);
       if (close) setModal(null);
+      return true;
     } catch (e) {
       setToast(
         e instanceof Error ? e.message : "Не удалось сохранить изменения",
@@ -176,6 +181,7 @@ export default function Home() {
           ? "Хранилище браузера недоступно. Изменения не сохранены."
           : "",
       );
+      return false;
     } finally {
       locked.current = false;
     }
@@ -408,21 +414,21 @@ export default function Home() {
           <span className="brand-dot" />
         </a>
         <nav aria-label="Основная навигация">
-          {(["dashboard", "readers", "books", "loans"] as Section[]).map(
-            (s) => {
-              const Icon = icons[s];
-              return (
-                <button
-                  key={s}
-                  className={"nav-item " + (section === s ? "active" : "")}
-                  onClick={() => navigate(s)}
-                >
-                  <Icon size={19} />
-                  <span>{ru[s]}</span>
-                </button>
-              );
-            },
-          )}
+          {(
+            ["dashboard", "readers", "books", "loans", "tables"] as Section[]
+          ).map((s) => {
+            const Icon = icons[s];
+            return (
+              <button
+                key={s}
+                className={"nav-item " + (section === s ? "active" : "")}
+                onClick={() => navigate(s)}
+              >
+                <Icon size={19} />
+                <span>{ru[s]}</span>
+              </button>
+            );
+          })}
           <details className="secondary-nav">
             <summary>
               Дополнительно
@@ -524,6 +530,8 @@ export default function Home() {
                       "Каждая книга на своём месте. Найдите нужную за секунды.",
                     loans:
                       "Выдавайте, продлевайте и принимайте книги в пару кликов.",
+                    tables:
+                      "Выберите стол для чтения или учёбы и забронируйте удобное время.",
                     visits:
                       "Кто читает, работает и вдохновляется в вашей библиотеке.",
                     notices: "Помогаем читателям возвращать книги вовремя.",
@@ -660,7 +668,7 @@ export default function Home() {
             </>
           ) : (
             <>
-              {section !== "settings" && (
+              {section !== "settings" && section !== "tables" && (
                 <div className="toolbar">
                   <div className="search-input">
                     <Search size={17} />
@@ -1237,6 +1245,23 @@ export default function Home() {
                     )}
                   </div>
                 </section>
+              )}
+              {section === "tables" && (
+                <TableBookings
+                  db={db}
+                  onReserve={(input) =>
+                    mutate(
+                      (d) => {
+                        bookTable(d, input);
+                      },
+                      "Стол забронирован",
+                      false,
+                    )
+                  }
+                  onCancel={(id) =>
+                    mutate((d) => cancelBooking(d, id), "Бронь отменена", false)
+                  }
+                />
               )}
               {section === "settings" && (
                 <div className="settings-layout">

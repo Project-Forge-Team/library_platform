@@ -1,3 +1,8 @@
+import {
+  defaultTables,
+  type StudyTable,
+  type TableBooking,
+} from "./booking.ts";
 import { addDays, format, differenceInCalendarDays } from "date-fns";
 export type Reader = {
   id: string;
@@ -60,6 +65,8 @@ export type Database = {
   notices: Notice[];
   events: Event[];
   library: string;
+  tables: StudyTable[];
+  bookings: TableBooking[];
 };
 export const day = (date: Date = new Date()) => format(date, "yyyy-MM-dd");
 export const uid = () => crypto.randomUUID();
@@ -227,6 +234,8 @@ export function seed(): Database {
         i % 6
       ],
     })),
+    tables: structuredClone(defaultTables),
+    bookings: [],
     loans: [],
     visits: [],
     notices: [],
@@ -307,6 +316,13 @@ export const repository: Repository = {
         !Array.isArray(data.loans)
       )
         throw Error("Некорректные данные хранилища");
+      // Add the booking feature without replacing existing readers or loans.
+      const needsMigration =
+        !Array.isArray(data.tables) || !Array.isArray(data.bookings);
+      if (!Array.isArray(data.tables))
+        data.tables = structuredClone(defaultTables);
+      if (!Array.isArray(data.bookings)) data.bookings = [];
+      if (needsMigration) this.save(data);
       return data;
     }
     const db = seed();
